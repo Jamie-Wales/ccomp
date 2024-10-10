@@ -1,8 +1,5 @@
 (* Token types *)
-type number = Float of float | Integer of int
-type operator = Plus | Minus | Star | Slash
-type keyword = Return | Int | Main
-type symbol = LeftParen | RightParen | LeftCurly | RightCurly | Semicolon
+open Grammar
 
 type token =
   | Number of number
@@ -14,19 +11,19 @@ type token =
 
 type token' = { lexeme : token; line : int }
 
-(* Regex pattern type *)
+(* regex pattern type *)
 type regex_pattern = {
   regex : Str.regexp;
   constructor : string -> int -> token' option;
 }
 
-(* List of keywords *)
+(* list of keywords *)
 let keywords = [ ("return", Return); ("int", Int); ("main", Main) ]
 
-(* Helper function to check if a string is a keyword *)
+(* helper function to check if a string is a keyword *)
 let is_keyword s = List.find_opt (fun (kw, _) -> kw = s) keywords
 
-(* List of regex patterns and their token constructors *)
+(* list of regex patterns and their token constructors *)
 let patterns =
   [
     {
@@ -85,7 +82,7 @@ let patterns =
     };
   ]
 
-(* Token matching function *)
+(* token matching function *)
 let match_token input position line =
   let rec try_patterns = function
     | [] -> None
@@ -99,7 +96,7 @@ let match_token input position line =
   in
   try_patterns patterns
 
-(* Print token function *)
+(* print token function *)
 let print_token (tok : token') =
   Printf.printf "Token at line %d: " tok.line;
   match tok.lexeme with
