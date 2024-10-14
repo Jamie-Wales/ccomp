@@ -1,28 +1,105 @@
 open Token
 open Grammar
 
-type parser_state = { token : token list; current_token : int }
+type parser_state = { token : token array; current_token : int }
 type parse_error = string
-type success = expression option
-type parse_result = (success, parse_error) result
+type 'a parse_result = ('a, parse_error) result
 
-(* Helper function to advance the parser state *)
+type precedence =
+  | None
+  | Assignment
+  | Or
+  | And
+  | Equality
+  | Comparison
+  | Term
+  | Factor
+
+type prefix_fn = parser_state -> expression parse_result * parser_state
+
+type infix_fn =
+  parser_state -> expression -> expression parse_result * parser_state
+
+type parse_rule = {
+  prefix : prefix_fn option;
+  infix : infix_fn option;
+  precedence : precedence;
+}
+
+let peek parser =
+  if parser.current_token < Array.length parser.token - 1 then
+    Some parser.token.(parser.current_token + 1)
+  else None
+
 let advance parser amount =
   { parser with current_token = parser.current_token + amount }
 
-(* Function to parse a literal expression *)
-let parse_literal parser : parse_result =
-  match List.hd parser.token with
-  | Number n -> Ok (Some (Literal n))
-  | _ -> Error "Expected a number literal"
+let current_token (parser : parser_state) : token =
+  parser.token.(parser.current_token)
 
-let rec parse (parser : parser_state) (acc : expression list) : parse_result =
-  match parse_literal parser with
-  | Ok (Some expr) -> parse (advance parser 1) (expr :: acc)
-  | Ok None -> Ok None
-  | Error msg -> Error msg
+let parse_literal (parser : parser_state) :
+    expression parse_result * parser_state =
+  match current_token parser with
+  | Number n -> (
+      match n with
+      | Integer i -> (Ok (Literal (Integer i)), advance parser 1)
+      | Float f -> (Ok (Literal (Float f)), advance parser 1))
+  | _ -> (Error "Expected a number", parser)
 
-(* Initialize the parser and start parsing *)
-let init_parser (tokens : token list) : parse_result =
-  let initial_parser = { token = tokens; current_token = 0 } in
-  parse initial_parser []
+let rec get_rule (token : token) : parse_rule =
+  match token with
+  | Number _ -> { prefix = Some parse_literal; infix = None; precedence = None }
+  | Operator o -> (
+      match o with
+      | Plus | Minus ->
+          { prefix = None; infix = Some parse_binary; precedence = Term }
+      | Star | Slash ->
+          { prefix = None; infix = Some parse_binary; precedence = Factor }
+      | _ -> { prefix = None; infix = None; precedence = None })
+  | _ -> { prefix = None; infix = None; precedence = None }
+
+and parse_binary (parser : parser_state) (left : expression) :
+    expression parse_result * parser_state =
+  match current_token parser with
+  | Operator op -> (
+      let right_result, new_parser =
+        parse_precedence (get_rule (Operator op)).precedence (advance parser 1)
+      in
+      match right_result with
+      | Ok right -> (Ok (Binary (left, op, right)), new_parser)
+      | Error e -> (Error e, new_parser))
+  | _ -> (Error "Expected operator", parser)
+
+and parse_precedence precedence parser =
+  let parser = advance parser 1 in
+  let current_tok = current_token parser in
+  let prefix_rule = get_rule current_tok in
+  let expr_result, parser =
+    match prefix_rule.prefix with
+    | Some prefix_fn -> prefix_fn parser
+    | None -> (Error "Expect expression.", parser)
+  in
+  let rec parse_precedence_loop expr_result parser =
+    match expr_result with
+    | Error _ -> (expr_result, parser)
+    | Ok expr ->
+        let current_tok = current_token parser in
+        let rule = get_rule current_tok in
+        if precedence < rule.precedence then
+          match rule.infix with
+          | Some infix_fn ->
+              let parser = advance parser 1 in
+              let new_expr_result, new_parser = infix_fn parser expr in
+              parse_precedence_loop new_expr_result new_parser
+          | None -> (Ok expr, parser)
+        else (Ok expr, parser)
+  in
+  parse_precedence_loop expr_result parser
+
+let parse_expression parser : expression parse_result * parser_state =
+  parse_precedence None parser
+
+let init_parser (tokens : token list) : expression parse_result =
+  let initial_parser = { token = Array.of_list tokens; current_token = 0 } in
+  let result, _ = parse_expression initial_parser in
+  result
