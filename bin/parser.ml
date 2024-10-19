@@ -1,4 +1,4 @@
-open Token
+open Scanner
 open Grammar
 
 type parser_state = { token : token array; current_token : int }
@@ -42,9 +42,13 @@ let parse_literal (parser : parser_state) :
   match current_token parser with
   | Number n -> (
       match n with
-      | Integer i -> (Ok (Literal (Integer i)), advance parser 1)
-      | Float f -> (Ok (Literal (Float f)), advance parser 1))
-  | _ -> (Error "Expected a number", parser)
+      | Integer i -> (Ok (Literal (Number (Integer i))), advance parser 1)
+      | Float f -> (Ok (Literal (Number (Float f))), advance parser 1))
+  | _ ->
+      ( Error
+          (Printf.sprintf "Expected a number, got %s"
+             (token_to_string (current_token parser))),
+        parser )
 
 let rec get_rule (token : token) : parse_rule =
   match token with
@@ -62,42 +66,51 @@ and parse_binary (parser : parser_state) (left : expression) :
     expression parse_result * parser_state =
   match current_token parser with
   | Operator op -> (
+      let parser = advance parser 1 in
       let right_result, new_parser =
-        parse_precedence (get_rule (Operator op)).precedence (advance parser 1)
+        parse_precedence (get_rule (Operator op)).precedence parser
       in
       match right_result with
       | Ok right -> (Ok (Binary (left, op, right)), new_parser)
       | Error e -> (Error e, new_parser))
-  | _ -> (Error "Expected operator", parser)
+  | _ ->
+      ( Error
+          (Printf.sprintf "Expected operator, got %s"
+             (token_to_string (current_token parser))),
+        parser )
 
 and parse_precedence precedence parser =
-  let parser = advance parser 1 in
   let current_tok = current_token parser in
   let prefix_rule = get_rule current_tok in
   let expr_result, parser =
     match prefix_rule.prefix with
     | Some prefix_fn -> prefix_fn parser
-    | None -> (Error "Expect expression.", parser)
+    | None ->
+        ( Error
+            (Printf.sprintf "Expected expression, got %s"
+               (token_to_string current_tok)),
+          parser )
   in
   let rec parse_precedence_loop expr_result parser =
     match expr_result with
     | Error _ -> (expr_result, parser)
     | Ok expr ->
-        let current_tok = current_token parser in
-        let rule = get_rule current_tok in
-        if precedence < rule.precedence then
-          match rule.infix with
-          | Some infix_fn ->
-              let parser = advance parser 1 in
-              let new_expr_result, new_parser = infix_fn parser expr in
-              parse_precedence_loop new_expr_result new_parser
-          | None -> (Ok expr, parser)
-        else (Ok expr, parser)
+        if parser.current_token >= Array.length parser.token then
+          (Ok expr, parser)
+        else
+          let current_tok = current_token parser in
+          let rule = get_rule current_tok in
+          if precedence < rule.precedence then
+            match rule.infix with
+            | Some infix_fn ->
+                let new_expr_result, new_parser = infix_fn parser expr in
+                parse_precedence_loop new_expr_result new_parser
+            | None -> (Ok expr, parser)
+          else (Ok expr, parser)
   in
   parse_precedence_loop expr_result parser
 
-let parse_expression parser : expression parse_result * parser_state =
-  parse_precedence None parser
+let parse_expression parser = parse_precedence None parser
 
 let init_parser (tokens : token list) : expression parse_result =
   let initial_parser = { token = Array.of_list tokens; current_token = 0 } in

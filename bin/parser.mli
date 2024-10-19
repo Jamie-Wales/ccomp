@@ -1,5 +1,5 @@
-open Token
 open Grammar
+open Scanner
 
 type parser_state = { token : token array; current_token : int }
 type parse_error = string
