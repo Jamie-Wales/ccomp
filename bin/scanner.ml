@@ -74,7 +74,7 @@ let patterns =
           | None -> Some { lexeme = Identifier s; line });
     };
     {
-      regex = Str.regexp "\\([+\\-\\*/=<>!]\\|<=\\|>=\\|==\\|!=\\)";
+regex = Str.regexp "\\([+*/=<>!\\-]\\|<=\\|>=\\|==\\|!=\\)";
       constructor =
         (fun s line ->
           let op =

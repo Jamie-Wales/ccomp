@@ -3,7 +3,7 @@ open Parser
 open Grammar
 
 let test_scanner () =
-  let input = "10 + 2 * 3" in
+  let input = "10 + 2 * -3" in
   let tokens = init_scanner input in
   Printf.printf "Scanned %d tokens:\n" (List.length tokens);
   List.iter print_token tokens;

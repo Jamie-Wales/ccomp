@@ -14,6 +14,7 @@ type precedence =
   | Comparison
   | Term
   | Factor
+  | Call
 
 val peek : parser_state -> token option
 val advance : parser_state -> int -> parser_state

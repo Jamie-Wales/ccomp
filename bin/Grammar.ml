@@ -21,6 +21,7 @@ type literal = Number of number | String of string
 type expression =
   | Literal of literal
   | Binary of expression * operator * expression
+  | Unary of operator * expression
 
 let string_of_operator = function
   | Plus -> "+"
@@ -46,8 +47,9 @@ let rec expression_to_string (expr : expression) : string =
   match expr with
   | Literal l -> number_to_string l
   | Binary (left, op, right) ->
-      "(" ^ expression_to_string left ^ " " ^ string_of_operator op ^ " "
-      ^ expression_to_string right ^ ")"
+        Printf.sprintf "(%s %s %s)" (expression_to_string left) (string_of_operator op) (expression_to_string right)
+ | Unary (op, expr) -> 
+        Printf.sprintf "(%s%s)" (string_of_operator op) (expression_to_string expr)
 
 let print_expression (expr : expression) : unit =
   print_string (expression_to_string expr);

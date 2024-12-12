@@ -14,6 +14,7 @@ type precedence =
   | Comparison
   | Term
   | Factor
+  | Call
 
 type prefix_fn = parser_state -> expression parse_result * parser_state
 
@@ -55,12 +56,31 @@ let rec get_rule (token : token) : parse_rule =
   | Number _ -> { prefix = Some parse_literal; infix = None; precedence = None }
   | Operator o -> (
       match o with
-      | Plus | Minus ->
-          { prefix = None; infix = Some parse_binary; precedence = Term }
+      | Minus ->
+          { prefix = Some parse_unary; infix = Some parse_binary; precedence = Term }
+
+      | Plus ->
+              { prefix = None; infix = Some parse_binary; precedence = Term }
       | Star | Slash ->
           { prefix = None; infix = Some parse_binary; precedence = Factor }
       | _ -> { prefix = None; infix = None; precedence = None })
   | _ -> { prefix = None; infix = None; precedence = None }
+
+and parse_unary (parser: parser_state) = 
+  match current_token parser with
+  | Operator op -> (
+      let parser = advance parser 1 in
+      let right_result, new_parser =
+        parse_precedence (get_rule (Operator op)).precedence parser
+      in
+      match right_result with
+      | Ok right -> (Ok (Unary (op, right)), new_parser)
+      | Error e -> (Error e, new_parser))
+  | _ ->
+      ( Error
+          (Printf.sprintf "Expected operator, got %s"
+             (token_to_string (current_token parser))),
+        parser )
 
 and parse_binary (parser : parser_state) (left : expression) :
     expression parse_result * parser_state =
