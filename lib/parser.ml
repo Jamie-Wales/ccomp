@@ -1,4 +1,4 @@
-open Scanner
+open Scanner 
 open Grammar
 
 type parser_state = { token : token array; current_token : int }

@@ -1,6 +1,7 @@
+open Compiler_lib
+open Grammar
 open Scanner
 open Parser
-open Grammar
 
 let test_scanner () =
   let input = "10 + 2 * -3" in

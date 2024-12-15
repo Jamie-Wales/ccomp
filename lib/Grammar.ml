@@ -37,7 +37,7 @@ let string_of_operator = function
   | BangEqual -> "!="
   | Bang -> "!"
 
-let number_to_string num : string =
+let literal_to_string(num: literal) : string =
   match num with
   | Number n -> (
       match n with Integer i -> string_of_int i | Float f -> string_of_float f)
@@ -45,7 +45,7 @@ let number_to_string num : string =
 
 let rec expression_to_string (expr : expression) : string =
   match expr with
-  | Literal l -> number_to_string l
+  | Literal l -> literal_to_string l
   | Binary (left, op, right) ->
         Printf.sprintf "(%s %s %s)" (expression_to_string left) (string_of_operator op) (expression_to_string right)
  | Unary (op, expr) -> 
