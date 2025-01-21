@@ -1,4 +1,5 @@
 open Grammar
+open Operator
 
 (* Token types *)
 type token =
@@ -10,10 +11,8 @@ type token =
   | Symbol of symbol
   | EOF
 
-type token' = { lexeme : token; line : int }
-
 (* Scanner state *)
-type scanner = { input : string; position : int; line : int }
+type scanner = { input : string; position : int }
 
 let token_to_string = function
   | Number (Integer i) -> Printf.sprintf "Integer(%d)" i
@@ -27,17 +26,15 @@ let token_to_string = function
   | Symbol s ->
       Printf.sprintf "Symbol(%s)"
         (match s with
-        | LeftParen -> "("
-        | RightParen -> ")"
-        | LeftCurly -> "{"
-        | RightCurly -> "}"
+        | LeftParen -> "(" | RightParen -> ")"
+        | LeftCurly -> "{" | RightCurly -> "}"
         | Semicolon -> ";")
   | EOF -> "EOF"
 
 (* Regex pattern type *)
 type regex_pattern = {
   regex : Str.regexp;
-  constructor : string -> int -> token' option;
+  constructor : string -> token option;
 }
 
 (* List of keywords *)
@@ -51,72 +48,65 @@ let patterns =
   [
     {
       regex = Str.regexp "\\([0-9]+\\.[0-9]+\\)";
-      constructor =
-        (fun s line ->
-          Some { lexeme = Number (Float (float_of_string s)); line });
+      constructor = (fun s -> Some (Number (Float (float_of_string s))));
     };
     {
       regex = Str.regexp "\\([0-9]+\\)";
-      constructor =
-        (fun s line ->
-          Some { lexeme = Number (Integer (int_of_string s)); line });
+      constructor = (fun s -> Some (Number (Integer (int_of_string s))));
     };
     {
       regex = Str.regexp "\"\\([^\"]*\\)\"";
-      constructor = (fun s line -> Some { lexeme = String s; line });
+      constructor = (fun s -> Some (String s));
     };
     {
       regex = Str.regexp "\\([a-zA-Z_][a-zA-Z0-9_]*\\)";
-      constructor =
-        (fun s line ->
-          match is_keyword s with
-          | Some (_, kw) -> Some { lexeme = Keyword kw; line }
-          | None -> Some { lexeme = Identifier s; line });
+      constructor = (fun s ->
+        match is_keyword s with
+        | Some (_, kw) -> Some (Keyword kw)
+        | None -> Some (Identifier s));
     };
     {
-regex = Str.regexp "\\([+*/=<>!\\-]\\|<=\\|>=\\|==\\|!=\\)";
-      constructor =
-        (fun s line ->
-          let op =
-            match s with
-            | "+" -> Plus
-            | "-" -> Minus
-            | "*" -> Star
-            | "/" -> Slash
-            | _ -> failwith "Unexpected operator"
-          in
-          Some { lexeme = Operator op; line });
+      regex = Str.regexp "\\([+*/=<>!\\-]\\|<=\\|>=\\|==\\|!=\\)";
+      constructor = (fun s ->
+        let op = match s with
+          | "+" -> Plus
+          | "-" -> Minus
+          | "*" -> Star
+          | "/" -> Slash
+          | _ -> failwith "Unexpected operator"
+        in
+        Some (Operator op));
     };
     {
       regex = Str.regexp "\\([(]\\)";
-      constructor = (fun _ line -> Some { lexeme = Symbol LeftParen; line });
+      constructor = (fun _ -> Some (Symbol LeftParen));
     };
     {
       regex = Str.regexp "\\([)]\\)";
-      constructor = (fun _ line -> Some { lexeme = Symbol RightParen; line });
+      constructor = (fun _ -> Some (Symbol RightParen));
     };
     {
       regex = Str.regexp "\\([{]\\)";
-      constructor = (fun _ line -> Some { lexeme = Symbol LeftCurly; line });
+      constructor = (fun _ -> Some (Symbol LeftCurly));
     };
     {
       regex = Str.regexp "\\([}]\\)";
-      constructor = (fun _ line -> Some { lexeme = Symbol RightCurly; line });
+      constructor = (fun _ -> Some (Symbol RightCurly));
     };
     {
       regex = Str.regexp "\\([;]\\)";
-      constructor = (fun _ line -> Some { lexeme = Symbol Semicolon; line });
+      constructor = (fun _ -> Some (Symbol Semicolon));
     };
   ]
 
 (* Token matching function *)
-let match_token input position line =
+let match_token input position =
   let rec try_patterns = function
     | [] -> None
     | pattern :: rest ->
         if Str.string_match pattern.regex input position then
           let matched = Str.matched_group 1 input in
-          match pattern.constructor matched line with
+          match pattern.constructor matched with
           | Some token -> Some (token, Str.match_end ())
           | None -> try_patterns rest
         else try_patterns rest
@@ -124,77 +114,46 @@ let match_token input position line =
   try_patterns patterns
 
 (* Helper functions *)
-let update_scanner_state scanner new_position new_line =
-  { scanner with position = new_position; line = new_line }
+let advance scanner new_position =
+  { scanner with position = new_position }
 
-let is_whitespace ch = ch = ' ' || ch = '\t' || ch = '\r'
+let is_whitespace ch = ch = ' ' || ch = '\t' || ch = '\r' || ch = '\n'
 
 (* Main scanner function *)
 let rec scan_tokens scanner acc =
   let rec skip_whitespace scanner =
-    if
-      scanner.position < String.length scanner.input
-      && is_whitespace scanner.input.[scanner.position]
-    then
-      skip_whitespace
-        (update_scanner_state scanner (scanner.position + 1) scanner.line)
+    if scanner.position < String.length scanner.input 
+       && is_whitespace scanner.input.[scanner.position] then
+      skip_whitespace (advance scanner (scanner.position + 1))
     else scanner
   in
   let scanner = skip_whitespace scanner in
   if scanner.position >= String.length scanner.input then
-    List.rev ({ lexeme = EOF; line = scanner.line } :: acc)
+    List.rev (EOF :: acc)
   else
-    match match_token scanner.input scanner.position scanner.line with
+    match match_token scanner.input scanner.position with
     | Some (token, new_pos) ->
-        let new_scanner = update_scanner_state scanner new_pos scanner.line in
+        let new_scanner = advance scanner new_pos in
         scan_tokens new_scanner (token :: acc)
     | None ->
         if scanner.input.[scanner.position] = '\n' then
-          let new_scanner =
-            update_scanner_state scanner (scanner.position + 1)
-              (scanner.line + 1)
-          in
-          scan_tokens new_scanner acc
+          scan_tokens (advance scanner (scanner.position + 1)) acc
         else
           failwith
-            (Printf.sprintf "Unexpected character at line %d, position %d"
-               scanner.line (scanner.position + 1))
+            (Printf.sprintf "Unexpected character at position %d"
+               (scanner.position + 1))
 
 (* Initialize scanner and start tokenization *)
 let init_scanner input =
-  let initial_scanner = { input; position = 0; line = 1 } in
+  let initial_scanner = { input; position = 0 } in
   scan_tokens initial_scanner []
-
-(* Print token function *)
-let print_token (tok : token') =
-  Printf.printf "Token at line %d: " tok.line;
-  match tok.lexeme with
-  | Number n -> (
-      match n with
-      | Integer i -> Printf.printf "Integer %d\n" i
-      | Float f -> Printf.printf "Float %f\n" f)
-  | String s -> Printf.printf "String \"%s\"\n" s
-  | Identifier s -> Printf.printf "Identifier \"%s\"\n" s
-  | Keyword k ->
-      Printf.printf "Keyword \"%s\"\n"
-        (match k with Return -> "return" | Int -> "int" | Main -> "main")
-  | Operator op -> Printf.printf "Operator %s\n" (string_of_operator op)
-  | Symbol sym ->
-      Printf.printf "Symbol %s\n"
-        (match sym with
-        | LeftParen -> "("
-        | RightParen -> ")"
-        | LeftCurly -> "{"
-        | RightCurly -> "}"
-        | Semicolon -> ";")
-  | EOF -> Printf.printf "EOF\n"
 
 (* Test function *)
 let test () =
   let input = "int main() { return 42 + 3.14; }" in
   let tokens = init_scanner input in
   Printf.printf "Scanned %d tokens:\n" (List.length tokens);
-  List.iter print_token tokens
+  List.iter (fun tok -> Printf.printf "%s\n" (token_to_string tok)) tokens
 
 (* Run the test *)
 let () = test ()

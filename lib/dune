@@ -2,4 +2,4 @@
  (name compiler_lib)
  (public_name ccomp)
  (libraries str)
- (modules Scanner Parser Grammar))
+ (modules operator scanner parser Grammar))

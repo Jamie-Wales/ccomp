@@ -1,18 +1,6 @@
-type number = Float of float | Integer of int
+open Operator
 
-type operator =
-  | Plus
-  | Minus
-  | Star
-  | Slash
-  | Equal
-  | Less
-  | Greater
-  | LessEqual
-  | GreaterEqual
-  | EqualEqual
-  | BangEqual
-  | Bang
+type number = Float of float | Integer of int
 
 type keyword = Return | Int | Main
 type symbol = LeftParen | RightParen | LeftCurly | RightCurly | Semicolon
@@ -23,19 +11,10 @@ type expression =
   | Binary of expression * operator * expression
   | Unary of operator * expression
 
-let string_of_operator = function
-  | Plus -> "+"
-  | Minus -> "-"
-  | Star -> "*"
-  | Slash -> "/"
-  | Equal -> "="
-  | Less -> "<"
-  | Greater -> ">"
-  | LessEqual -> "<="
-  | GreaterEqual -> ">="
-  | EqualEqual -> "=="
-  | BangEqual -> "!="
-  | Bang -> "!"
+
+type statement = ExpressionStatement of expression | FunctionStatement of statement list | ReturnStatement of expression
+
+type program = Program of statement list
 
 let literal_to_string(num: literal) : string =
   match num with
@@ -54,3 +33,21 @@ let rec expression_to_string (expr : expression) : string =
 let print_expression (expr : expression) : unit =
   print_string (expression_to_string expr);
   print_newline ()
+
+let rec statement_to_string (stmt: statement) : string =
+    match stmt with
+    | ReturnStatement expr -> 
+        Printf.sprintf "return %s;" (expression_to_string expr)
+    | ExpressionStatement expr -> 
+        Printf.sprintf "%s;" (expression_to_string expr)
+    | FunctionStatement stmts ->
+        Printf.sprintf "{\n%s\n}" 
+            (String.concat "\n" (List.map statement_to_string stmts))
+
+let print_program (prog: program) : unit =
+    match prog with
+    | Program stmts ->
+        Printf.printf "Program:\n";
+        List.iter (fun stmt -> 
+            Printf.printf "%s\n" (statement_to_string stmt)
+        ) stmts
